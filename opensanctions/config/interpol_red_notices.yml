@@ -6,7 +6,7 @@ pipeline:
     method: opensanctions.crawlers.interpol_red_notices:index
     params:
       #url: 'http://www.interpol.int/notice/search/wanted/(offset)/%s'
-      url: 'https://www.interpol.int/How-we-work/Notices/View-Red-Notices'
+      url: 'https://ws-public.interpol.int/notices/v1/red?resultPerPage=20&page=%s'
     handle:
       pass: fetch
   fetch:

@@ -6,9 +6,12 @@ from opensanctions import constants
 from opensanctions.util import EntityEmitter
 from opensanctions.util import jointext
 
+import json
+import time
+
 SEXES = {
-    'Male': constants.MALE,
-    'Female': constants.FEMALE,
+    'M': constants.MALE,
+    'F': constants.FEMALE,
 }
 
 
@@ -22,57 +25,71 @@ def element_text(el):
 
 def parse(context, data):
     emitter = EntityEmitter(context)
-    with context.http.rehash(data) as result:
-        doc = result.html
-        name = element_text(doc.find('.//div[@class="nom_fugitif_wanted"]'))
-        if name is None or name == 'Identity unknown':
-            return
-        entity = emitter.make('Person')
-        entity.make_id(data.get('url'))
-        entity.add('name', name)
-        entity.add('sourceUrl', data.get('url'))
-        wanted = element_text(doc.find('.//span[@class="nom_fugitif_wanted_small"]'))  # noqa
-        entity.add('program', wanted)
-        entity.add('keywords', 'REDNOTICE')
-        entity.add('keywords', 'CRIME')
+    res = context.http.get(data.get('url'))
+    resJson = json.loads(res.text)
+    embedded = resJson['_embedded'] 
+    notices = embedded['notices']
+    
+    for notice in notices:
+        emitter = EntityEmitter(context)
+        links = notice['_links']
+        self = links['self']
+        url = self['href']
+        
+        context.log.info("Interpol Red Notices URL: %s", url)
+    
+        with context.http.get(url) as result:
+            dict = json.loads(result.text)
+            name = jointext(dict['forename'], dict['name'])
+            if name is None or name == 'Identity unknown':
+                return
+            entity = emitter.make('Person')
+            entity.make_id(url)
+            entity.add('name', name)
+            entity.add('sourceUrl', url)
+            description = dict['distinguishing_marks']
+            entity.add('description', description)
+            entity.add('keywords', 'REDNOTICE')
+            entity.add('keywords', 'CRIME')
 
-        if ', ' in name:
-            last, first = name.split(', ', 1)
-            entity.add('alias', jointext(first, last))
+            if ', ' in name:
+                last, first = name.split(', ', 1)
+                entity.add('alias', jointext(first, last))
 
-        for row in doc.findall('.//div[@class="bloc_detail"]//tr'):
-            title, value = row.findall('./td')
-            name = slugify(element_text(title), sep='_')
-            value = element_text(value)
-            if value is None:
-                continue
-            if name == 'charges':
-                entity.add('summary', value)
-            elif name == 'present_family_name':
-                entity.add('lastName', value)
-            elif name == 'forename':
-                entity.add('firstName', value)
-            elif name == 'nationality':
-                for country in value.split(', '):
-                    entity.add('nationality', country)
-            elif name == 'sex':
-                entity.add('gender', SEXES[value])
-            elif name == 'date_of_birth':
-                entity.add('birthDate', value.split('(')[0])
-            elif name == 'place_of_birth':
-                entity.add('birthPlace', value)
-        emitter.emit(entity)
+            warrants = dict['arrest_warrants']
+            summary = ''        
+            for warrant in warrants:
+                issuingCountryId = jointext('[', warrant['issuing_country_id'], ']', sep='')
+                charge = jointext(issuingCountryId, warrant['charge'])
+                summary = jointext(summary, charge, sep='\r\n')
+
+            entity.add('summary', summary)
+            entity.add('lastName', dict['name'])
+            entity.add('firstName', dict['forename'])
+            entity.add('nationality', dict['nationalities'])
+            entity.add('gender', SEXES[dict['sex_id']])
+            entity.add('birthDate', dict['date_of_birth'])
+            entity.add('birthPlace', dict['place_of_birth'])
+
+            emitter.emit(entity)
+        time.sleep(1)
 
 
 def index(context, data):
-    page = data.get('page', 0)
+    page = data.get('page', 1)
     url = context.params.get('url')
-    url = url % (page * 9)
+    url = url % (page)
+    
+    context.emit(data={'url': url})    
+ 
     res = context.http.get(url)
-    links = res.html.findall('.//div[@class="wanted"]//a')
-    if not len(links):
+    dict = json.loads(res.text)
+
+    total = dict['total']
+    query = dict['query']
+    resultPerPage = query['resultPerPage']
+
+    if page > total / resultPerPage:
         return
-    for link in links:
-        case_url = urljoin(url, link.get('href'))
-        context.emit(data={'url': case_url})
+    
     context.recurse(data={'page': page + 1})

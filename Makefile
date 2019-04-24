@@ -1,14 +1,18 @@
 BUILD_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DATA_DIR:=$(BUILD_DIR)/data
 
-all: run
+all: build run
+
+build-new:
+	docker pull alephdata/memorious
+	docker build -f Dockerfile-new -t alephdata/opensanctions .
 
 build:
-	docker pull alephdata/memorious
 	docker build -t alephdata/opensanctions .
 
-run: build
-	docker run -ti -v $(DATA_DIR):/data alephdata/opensanctions /bin/sh
+run: 
+	docker container rm opensanctions
+	docker run --name=opensanctions -ti -v $(DATA_DIR):/data alephdata/opensanctions /bin/sh
 
 data/osanc.entities:
 	osanc-dump >data/osanc.entities
