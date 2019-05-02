@@ -1,6 +1,6 @@
 BUILD_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DATA_DIR:=$(BUILD_DIR)/data
-REDIS_URL:=$(shell getent hosts redis | awk '{ print $$1 }')
+REDIS_URL:=$(shell grep 'redis' /etc/hosts | awk '{ print $$1 }')
 
 all: build run
 
