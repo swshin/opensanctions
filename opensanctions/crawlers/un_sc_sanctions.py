@@ -66,9 +66,14 @@ def parse_individual(emitter, node):
     person = emitter.make('Person')
     sanction = parse_common(emitter, person, node)
     person.add('title', values(node.find('./TITLE')))
-    person.add('firstName', node.findtext('./FIRST_NAME'))
-    person.add('secondName', node.findtext('./SECOND_NAME'))
-    person.add('middleName', node.findtext('./THIRD_NAME'))
+    firstName = node.findtext('./FIRST_NAME')
+    secondName = node.findtext('./SECOND_NAME')
+    thirdName = node.findtext('./THIRD_NAME')
+    name = jointext(firstName, secondName, thirdName) 
+    person.add('name', name)
+    person.add('firstName', firstName)
+    person.add('secondName', secondName)
+    person.add('middleName', thirdName)
     person.add('position', values(node.find('./DESIGNATION')))
 
     for alias in node.findall('./INDIVIDUAL_ALIAS'):
@@ -117,9 +122,9 @@ def parse_individual(emitter, node):
 
 def parse_common(emitter, entity, node):
     entity.make_id(node.findtext('./DATAID'))
-    name = node.findtext('./NAME_ORIGINAL_SCRIPT')
-    name = name or node.findtext('./FIRST_NAME')
-    entity.add('name', name)
+    #name = node.findtext('./NAME_ORIGINAL_SCRIPT')
+    #name = name or node.findtext('./FIRST_NAME')
+    #entity.add('name', name)
     entity.add('description', node.findtext('./COMMENTS1'))
     entity.add('modifiedAt', values(node.find('./LAST_DAY_UPDATED')))
 
